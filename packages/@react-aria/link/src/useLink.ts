@@ -13,6 +13,7 @@
 import {AriaLinkProps} from '@react-types/link';
 import {filterDOMProps, mergeProps} from '@react-aria/utils';
 import {HTMLAttributes, RefObject} from 'react';
+import {useFocusable} from '@react-aria/focus';
 import {usePress} from '@react-aria/interactions';
 
 export interface AriaLinkOptions extends AriaLinkProps {
@@ -27,7 +28,9 @@ export interface AriaLinkOptions extends AriaLinkProps {
 
 export interface LinkAria {
   /** Props for the link element. */
-  linkProps: HTMLAttributes<HTMLElement>
+  linkProps: HTMLAttributes<HTMLElement>,
+  /** Whether the link is currently pressed. */
+  isPressed: boolean
 }
 
 /**
@@ -54,13 +57,15 @@ export function useLink(props: AriaLinkOptions, ref: RefObject<HTMLElement>): Li
       tabIndex: !isDisabled ? 0 : undefined
     };
   }
-
-  let {pressProps} = usePress({onPress, onPressStart, onPressEnd, isDisabled, ref});
+  let {focusableProps} = useFocusable(props, ref);
+  let {pressProps, isPressed} = usePress({onPress, onPressStart, onPressEnd, isDisabled, ref});
   let domProps = filterDOMProps(otherProps, {labelable: true});
+  let interactionHandlers = mergeProps(focusableProps, pressProps);
 
   return {
+    isPressed, // Used to indicate press state for visual
     linkProps: mergeProps(domProps, {
-      ...pressProps,
+      ...interactionHandlers,
       ...linkProps,
       'aria-disabled': isDisabled || undefined,
       onClick: (e) => {

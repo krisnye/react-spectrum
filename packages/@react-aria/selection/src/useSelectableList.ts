@@ -11,7 +11,7 @@
  */
 
 import {Collection, FocusStrategy, KeyboardDelegate, Node} from '@react-types/shared';
-import {HTMLAttributes, Key, RefObject, useEffect, useMemo} from 'react';
+import {HTMLAttributes, Key, RefObject, useMemo} from 'react';
 import {ListKeyboardDelegate} from './ListKeyboardDelegate';
 import {MultipleSelectionManager} from '@react-stately/selection';
 import {useCollator} from '@react-aria/i18n';
@@ -70,7 +70,11 @@ interface SelectableListOptions {
   /**
    * Whether the collection items should use virtual focus instead of being focused directly.
    */
-  shouldUseVirtualFocus?: boolean
+  shouldUseVirtualFocus?: boolean,
+  /**
+   * Whether navigation through tab key is enabled.
+   */
+  allowsTabNavigation?: boolean
 }
 
 interface SelectableListAria {
@@ -96,24 +100,14 @@ export function useSelectableList(props: SelectableListOptions): SelectableListA
     disallowEmptySelection,
     selectOnFocus = false,
     disallowTypeAhead,
-    shouldUseVirtualFocus
+    shouldUseVirtualFocus,
+    allowsTabNavigation
   } = props;
 
   // By default, a KeyboardDelegate is provided which uses the DOM to query layout information (e.g. for page up/page down).
   // When virtualized, the layout object will be passed in as a prop and override this.
   let collator = useCollator({usage: 'search', sensitivity: 'base'});
   let delegate = useMemo(() => keyboardDelegate || new ListKeyboardDelegate(collection, disabledKeys, ref, collator), [keyboardDelegate, collection, disabledKeys, ref, collator]);
-
-  // If not virtualized, scroll the focused element into view when the focusedKey changes.
-  // When virtualized, Virtualizer handles this internally.
-  useEffect(() => {
-    if (!isVirtualized && selectionManager.focusedKey && ref?.current) {
-      let element = ref.current.querySelector(`[data-key="${selectionManager.focusedKey}"]`) as HTMLElement;
-      if (element) {
-        scrollIntoView(ref.current, element);
-      }
-    }
-  }, [isVirtualized, ref, selectionManager.focusedKey]);
 
   let {collectionProps} = useSelectableCollection({
     ref,
@@ -124,40 +118,13 @@ export function useSelectableList(props: SelectableListOptions): SelectableListA
     disallowEmptySelection,
     selectOnFocus,
     disallowTypeAhead,
-    shouldUseVirtualFocus
+    shouldUseVirtualFocus,
+    allowsTabNavigation,
+    isVirtualized,
+    scrollRef: ref
   });
 
   return {
     listProps: collectionProps
   };
-}
-
-/**
- * Scrolls `scrollView` so that `element` is visible.
- * Similar to `element.scrollIntoView({block: 'nearest'})` (not supported in Edge),
- * but doesn't affect parents above `scrollView`.
- */
-function scrollIntoView(scrollView: HTMLElement, element: HTMLElement) {
-  let offsetX = element.offsetLeft - scrollView.offsetLeft;
-  let offsetY = element.offsetTop - scrollView.offsetTop;
-  let width = element.offsetWidth;
-  let height = element.offsetHeight;
-  let x = scrollView.scrollLeft;
-  let y = scrollView.scrollTop;
-  let maxX = x + scrollView.offsetWidth;
-  let maxY = y + scrollView.offsetHeight;
-
-  if (offsetX <= x) {
-    x = offsetX;
-  } else if (offsetX + width > maxX) {
-    x += offsetX + width - maxX;
-  }
-  if (offsetY <= y) {
-    y = offsetY;
-  } else if (offsetY + height > maxY) {
-    y += offsetY + height - maxY;
-  }
-
-  scrollView.scrollLeft = x;
-  scrollView.scrollTop = y;
 }

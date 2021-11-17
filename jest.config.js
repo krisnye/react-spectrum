@@ -18,7 +18,7 @@ let mocks = {};
 try {
   require.resolve('@react/react-spectrum/Button');
 } catch (err) {
-  mocks['^@react\/.*'] = 'identity-obj-proxy';
+  mocks['^@react/.*'] = 'identity-obj-proxy';
 }
 
 module.exports = {
@@ -101,7 +101,6 @@ module.exports = {
   moduleNameMapper: {
     '\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$': '<rootDir>/__mocks__/fileMock.js',
     '\\.(css|styl)$': 'identity-obj-proxy',
-    '\\.\./Icon/.*$': '<rootDir>/__mocks__/iconMock.js',
     ...mocks
   },
 
@@ -121,7 +120,12 @@ module.exports = {
   projects: ['<rootDir>'],
 
   // Use this configuration option to add custom reporters to Jest
-  // reporters: undefined,
+  reporters: [
+    'default',
+    ['jest-junit', {
+      addFileAttribute: true
+    }]
+  ],
 
   // Automatically reset mock state between every test
   // resetMocks: false,
@@ -165,14 +169,15 @@ module.exports = {
   // testLocationInResults: false,
 
   // The glob patterns Jest uses to detect test files
+  // see issue https://github.com/facebook/jest/issues/7108
   testMatch: [
-    "**/?(*.)+(test).[tj]s?(x)"
+    '**/packages/**/*.test.[tj]s?(x)'
   ],
 
   // An array of regexp pattern strings that are matched against all test paths, matched tests are skipped
   testPathIgnorePatterns: [
-    "/node_modules/",
-    "\\.ssr\\.test\\.[tj]sx?$"
+    '/node_modules/',
+    '\\.ssr\\.test\\.[tj]sx?$'
   ]
 
   // The regexp pattern or array of patterns that Jest uses to detect test files

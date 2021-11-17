@@ -101,6 +101,20 @@ export interface ListData<T> {
   move(key: Key, toIndex: number): void,
 
   /**
+   * Moves one or more items before a given key.
+   * @param key - The key of the item to move the items before.
+   * @param keys - The keys of the items to move.
+   */
+  moveBefore(key: Key, keys: Key[]): void,
+
+  /**
+   * Moves one or more items after a given key.
+   * @param key - The key of the item to move the items after.
+   * @param keys - The keys of the items to move.
+   */
+  moveAfter(key: Key, keys: Key[]): void,
+
+  /**
    * Updates an item in the list.
    * @param key - The key of the item to update.
    * @param newValue - The new value for the item.
@@ -112,6 +126,10 @@ export interface ListState<T> {
   items: T[],
   selectedKeys: Selection,
   filterText: string
+}
+
+interface CreateListOptions<T, C> extends ListOptions<T> {
+  cursor?: C
 }
 
 /**
@@ -148,19 +166,8 @@ export function useListData<T>(options: ListOptions<T>): ListData<T> {
   };
 }
 
-function insert<T>(state: ListState<T>, index: number, ...values: T[]): ListState<T> {
-  return {
-    ...state,
-    items: [
-      ...state.items.slice(0, index),
-      ...values,
-      ...state.items.slice(index)
-    ]
-  };
-}
-
-export function createListActions<T>(opts: ListOptions<T>, dispatch: (updater: (state: ListState<T>) => ListState<T>) => void): Omit<ListData<T>, 'items' | 'selectedKeys' | 'getItem' | 'filterText'> {
-  let {getKey} = opts;
+export function createListActions<T, C>(opts: CreateListOptions<T, C>, dispatch: (updater: (state: ListState<T>) => ListState<T>) => void): Omit<ListData<T>, 'items' | 'selectedKeys' | 'getItem' | 'filterText'> {
+  let {cursor, getKey} = opts;
   return {
     setSelectedKeys(selectedKeys: Selection) {
       dispatch(state => ({
@@ -208,9 +215,15 @@ export function createListActions<T>(opts: ListOptions<T>, dispatch: (updater: (
         let keySet = new Set(keys);
         let items = state.items.filter(item => !keySet.has(getKey(item)));
 
-        let selection = new Set(state.selectedKeys);
-        for (let key of keys) {
-          selection.delete(key);
+        let selection: Selection = 'all';
+        if (state.selectedKeys !== 'all') {
+          selection = new Set(state.selectedKeys);
+          for (let key of keys) {
+            selection.delete(key);
+          }
+        }
+        if (cursor == null && items.length === 0) {
+          selection = new Set();
         }
 
         return {
@@ -255,6 +268,29 @@ export function createListActions<T>(opts: ListOptions<T>, dispatch: (updater: (
         };
       });
     },
+    moveBefore(key: Key, keys: Key[]) {
+      dispatch(state => {
+        let toIndex = state.items.findIndex(item => getKey(item) === key);
+        if (toIndex === -1) {
+          return state;
+        }
+
+        // Find indices of keys to move. Sort them so that the order in the list is retained.
+        let indices = keys.map(key => state.items.findIndex(item => getKey(item) === key)).sort();
+        return move(state, indices, toIndex);
+      });
+    },
+    moveAfter(key: Key, keys: Key[]) {
+      dispatch(state => {
+        let toIndex = state.items.findIndex(item => getKey(item) === key);
+        if (toIndex === -1) {
+          return state;
+        }
+
+        let indices = keys.map(key => state.items.findIndex(item => getKey(item) === key)).sort();
+        return move(state, indices, toIndex + 1);
+      });
+    },
     update(key: Key, newValue: T) {
       dispatch(state => {
         let index = state.items.findIndex(item => getKey(item) === key);
@@ -272,5 +308,67 @@ export function createListActions<T>(opts: ListOptions<T>, dispatch: (updater: (
         };
       });
     }
+  };
+}
+
+function insert<T>(state: ListState<T>, index: number, ...values: T[]): ListState<T> {
+  return {
+    ...state,
+    items: [
+      ...state.items.slice(0, index),
+      ...values,
+      ...state.items.slice(index)
+    ]
+  };
+}
+
+function move<T>(state: ListState<T>, indices: number[], toIndex: number): ListState<T> {
+  // Shift the target down by the number of items being moved from before the target
+  for (let index of indices) {
+    if (index < toIndex) {
+      toIndex--;
+    }
+  }
+
+  let moves = indices.map(from => ({
+    from,
+    to: toIndex++
+  }));
+
+  // Shift later from indices down if they have a larger index
+  for (let i = 0; i < moves.length; i++) {
+    let a = moves[i].from;
+    for (let j = i; j < moves.length; j++) {
+      let b = moves[j].from;
+
+      if (b > a) {
+        moves[j].from--;
+      }
+    }
+  }
+
+  // Interleave the moves so they can be applied one by one rather than all at once
+  for (let i = 0; i < moves.length; i++) {
+    let a = moves[i];
+    for (let j = moves.length - 1; j > i; j--) {
+      let b = moves[j];
+
+      if (b.from < a.to) {
+        a.to++;
+      } else {
+        b.from++;
+      }
+    }
+  }
+
+  let copy = state.items.slice();
+  for (let move of moves) {
+    let [item] = copy.splice(move.from, 1);
+    copy.splice(move.to, 0, item);
+  }
+
+  return {
+    ...state,
+    items: copy
   };
 }

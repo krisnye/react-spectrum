@@ -20,3 +20,5 @@ export * from './useInteractOutside';
 export * from './useKeyboard';
 export * from './useMove';
 export * from './usePress';
+export * from './useScrollWheel';
+export * from './useLongPress';

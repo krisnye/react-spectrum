@@ -12,12 +12,16 @@
 
 import {hideOthers} from 'aria-hidden';
 
+type Revert = () => void;
+
+const currentDocument = typeof document !== 'undefined' ? document : undefined;
+
 /**
  * Acts as a polyfill for `aria-modal` by watching for added modals and hiding any surrounding DOM elements with `aria-hidden`.
  */
-export function watchModals(selector:string = 'body'): void {
+export function watchModals(selector:string = 'body', {document = currentDocument} = {}): Revert {
   /**
-   * Listen for additions to the child list of body. This is where providers render modal portals.
+   * Listen for additions to the child list of the selected element (defaults to body). This is where providers render modal portals.
    * When one is added, see if there is a modal inside it, if there is, then hide everything else from screen readers.
    * If there was already a modal open and a new one was added, undo everything that the previous modal had hidden and hide based on the new one.
    *
@@ -27,18 +31,16 @@ export function watchModals(selector:string = 'body'): void {
   let target = document.querySelector(selector);
   let config = {childList: true};
   let modalContainers = [];
-  let undo;
+  let undo: Revert | undefined;
 
   let observer = new MutationObserver((mutationRecord) => {
     for (let mutation of mutationRecord) {
       if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-        let addNode: Element = (Array.from(mutation.addedNodes).find((node: any) => node.querySelector?.('[aria-modal="true"], [data-ismodal]')) as HTMLElement);
+        let addNode: Element = (Array.from(mutation.addedNodes).find((node: any) => node.querySelector?.('[aria-modal="true"], [data-ismodal="true"]')) as HTMLElement);
         if (addNode) {
           modalContainers.push(addNode);
-          let modal = addNode.querySelector('[aria-modal="true"], [data-ismodal]') as HTMLElement;
-          if (undo) {
-            undo();
-          }
+          let modal = addNode.querySelector('[aria-modal="true"], [data-ismodal="true"]') as HTMLElement;
+          undo?.();
           undo = hideOthers(modal);
         }
       } else if (mutation.type === 'childList' && mutation.removedNodes.length > 0) {
@@ -48,7 +50,7 @@ export function watchModals(selector:string = 'body'): void {
           undo();
           modalContainers = modalContainers.filter((val, i) => i !== nodeIndexRemove);
           if (modalContainers.length > 0) {
-            let modal = modalContainers[modalContainers.length - 1].querySelector('[aria-modal="true"], [data-ismodal]');
+            let modal = modalContainers[modalContainers.length - 1].querySelector('[aria-modal="true"], [data-ismodal="true"]');
             undo = hideOthers(modal);
           } else {
             undo = undefined;
@@ -58,4 +60,8 @@ export function watchModals(selector:string = 'body'): void {
     }
   });
   observer.observe(target, config);
+  return () => {
+    undo?.();
+    observer.disconnect();
+  };
 }

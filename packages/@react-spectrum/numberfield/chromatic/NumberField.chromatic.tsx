@@ -11,8 +11,8 @@
  */
 
 import {classNames} from '@react-spectrum/utils';
+import {generatePowerset} from '@react-spectrum/story-utils';
 import {Grid, repeat} from '@react-spectrum/layout';
-import inputStyles from '@adobe/spectrum-css-temp/components/inputgroup/vars.css';
 import {mergeProps} from '@react-aria/utils';
 import {Meta, Story} from '@storybook/react';
 import {NumberField} from '../src';
@@ -25,13 +25,12 @@ let states = [
   {isDisabled: true},
   {isReadOnly: true},
   {hideStepper: true},
-  {validationState: ['valid', 'invalid', undefined]}
+  {validationState: ['valid', 'invalid']}
 ];
 
 let noLabelStates = [
   {UNSAFE_className: classNames(
     {},
-      classNames(inputStyles, 'focus-ring'),
       classNames(stepperStyles, 'focus-ring')
     )},
   {UNSAFE_className: classNames(
@@ -40,22 +39,7 @@ let noLabelStates = [
     )}
 ];
 
-// Generate a powerset of the options
-let combinations: any[] = [{}];
-for (let i = 0; i < states.length; i++) {
-  let len = combinations.length;
-  for (let j = 0; j < len; j++) {
-    if (states[i].validationState) {
-      states[i].validationState.forEach(state => {
-        let merged = mergeProps(combinations[j], {validationState: state});
-        combinations.push(merged);
-      });
-    } else {
-      let merged = mergeProps(combinations[j], states[i]);
-      combinations.push(merged);
-    }
-  }
-}
+let combinations = generatePowerset(states);
 
 let combinationsStyles: any[] = [...combinations];
 for (let i = 0; i < noLabelStates.length; i++) {
@@ -102,7 +86,7 @@ function shortName(key, value) {
       returnVal = 'hidestep';
       break;
     case 'validationState':
-      returnVal = `vs ${value === undefined ? 'none' : value}`;
+      returnVal = `vs ${value}`;
       break;
     case 'UNSAFE_className':
       returnVal = `cn ${value.includes('focus-ring') ? 'ring' : 'focused'}`;
@@ -142,14 +126,14 @@ const TemplateSmall: Story<SpectrumNumberFieldProps> = (args) => (
   </Grid>
 );
 
-// const TemplateWithForcedStyles: Story<SpectrumNumberFieldProps> = (args) => (
-//   <Grid columns={repeat(states.length, '1fr')} autoFlow="row" gap="size-300">
-//     {combinationsStyles.map(c => {
-//       let key = Object.keys(c).map(k => shortName(k, c[k])).join(' ');
-//       return <div key={key}><div>{key}</div><NumberField {...args} {...c} /></div>;
-//     })}
-//   </Grid>
-// );
+const TemplateWithForcedStyles: Story<SpectrumNumberFieldProps> = (args) => (
+  <Grid columns={repeat(states.length, '1fr')} autoFlow="row" gap="size-300">
+    {combinationsStyles.map(c => {
+      let key = Object.keys(c).map(k => shortName(k, c[k])).join(' ');
+      return <div key={key}><div>{key}</div><NumberField {...args} {...c} /></div>;
+    })}
+  </Grid>
+);
 
 export const PropDefaults = Template.bind({});
 PropDefaults.storyName = 'default';
@@ -188,7 +172,10 @@ PropCustomWidth.storyName = 'custom width';
 PropCustomWidth.args = {...PropDefaults.args, width: 'size-3000'};
 
 // we can only force the interaction styles on the no visible label stories
-// TODO refactor CSS so all states are top level, otherwise we can't do this one
-// export const PropInteractionStyles = TemplateWithForcedStyles.bind({});
-// PropInteractionStyles.storyName = 'interaction styles';
-// PropInteractionStyles.args = {...PropAriaLabelled.args};
+export const PropInteractionStyles = TemplateWithForcedStyles.bind({});
+PropInteractionStyles.storyName = 'interaction styles';
+PropInteractionStyles.args = {...PropAriaLabelled.args};
+
+export const PropInteractionStylesMinValue = TemplateWithForcedStyles.bind({});
+PropInteractionStylesMinValue.storyName = 'interaction styles min value';
+PropInteractionStylesMinValue.args = {...PropAriaLabelled.args, minValue: 10, defaultValue: 10};

@@ -13,13 +13,15 @@
 // needs to be imported first
 import MatchMediaMock from 'jest-matchmedia-mock';
 // eslint-disable-next-line rulesdir/sort-imports
-import {act, render} from '@testing-library/react';
+import {act, fireEvent, render} from '@testing-library/react';
 import {Button} from '@react-spectrum/button';
 import {Checkbox} from '@react-spectrum/checkbox';
 import {Provider} from '../';
 import React from 'react';
 import {Switch} from '@react-spectrum/switch';
+import {TextField} from '@react-spectrum/textfield';
 import {triggerPress} from '@react-spectrum/test-utils';
+import {useBreakpoint} from '@react-spectrum/utils';
 import userEvent from '@testing-library/user-event';
 
 let theme = {
@@ -31,6 +33,10 @@ let theme = {
 };
 let mediaQueryLight = '(prefers-color-scheme: light)';
 let mediaQueryDark = '(prefers-color-scheme: dark)';
+let mediaQueryMinXSmall = '(min-width: 190px)';
+let mediaQueryMinSmall = '(min-width: 640px)';
+let mediaQueryMinMedium = '(min-width: 768px)';
+let mediaQueryMinLarge = '(min-width: 1024px)';
 
 describe('Provider', () => {
   let matchMedia;
@@ -193,8 +199,88 @@ describe('Provider', () => {
     act(() => {
       matchMedia.useMediaQuery(mediaQueryDark);
     });
-    
+
     expect(provider1.classList.contains('spectrum--dark')).toBeTruthy();
     expect(provider2.classList.contains('spectrum--dark')).toBeTruthy();
+  });
+
+  describe('responsive styles', function () {
+    let breakpoints = {S: 480, M: 640, L: 1024};
+    // jsdom/cssstyle doesn't support var() yet, so we need to use other values
+    it.each`
+      name                    | mediaquery               | props                   | expected
+      ${'default'}            | ${mediaQueryMinXSmall}   | ${{}}                   | ${'192px'}
+      ${'default'}            | ${mediaQueryMinSmall}    | ${{}}                   | ${'1000px'}
+      ${'default'}            | ${mediaQueryMinMedium}   | ${{}}                   | ${'2000px'}
+      ${'default'}            | ${mediaQueryMinLarge}    | ${{}}                   | ${'3000px'}
+      ${'custom breakpoints'} | ${mediaQueryMinXSmall}   | ${{breakpoints}}        | ${'192px'}
+      ${'custom breakpoints'} | ${'(min-width: 480px)'}  | ${{breakpoints}}        | ${'1000px'}
+      ${'custom breakpoints'} | ${'(min-width: 640px)'}  | ${{breakpoints}}        | ${'2000px'}
+      ${'custom breakpoints'} | ${'(min-width: 1024px)'} | ${{breakpoints}}        | ${'3000px'}
+    `('$name $mediaquery', function ({mediaquery, props, expected}) {
+      matchMedia.useMediaQuery(mediaquery);
+      let {getByTestId} = render(
+        <Provider theme={theme} data-testid="testid1" {...props}>
+          <TextField
+            label="foo"
+            width={{base: '192px', S: '1000px', M: '2000px', L: '3000px'}} />
+        </Provider>
+      );
+      // use provider to get at the outer div, any props on TextField will end up on the input
+      let provider = getByTestId('testid1');
+      let field = provider.firstChild;
+      expect(field).toHaveStyle({width: expected});
+    });
+
+    it.each`
+      mediaquery             | expected
+      ${mediaQueryMinXSmall} | ${'192px'}
+      ${mediaQueryMinSmall}  | ${'192px'}
+      ${mediaQueryMinMedium} | ${'192px'}
+      ${mediaQueryMinLarge}  | ${'3000px'}
+    `('omitted sizes $mediaquery', function ({mediaquery, expected}) {
+      matchMedia.useMediaQuery(mediaquery);
+      let {getByTestId} = render(
+        <Provider theme={theme} data-testid="testid1">
+          <TextField
+            label="foo"
+            width={{base: '192px', L: '3000px'}} />
+        </Provider>
+      );
+      let provider = getByTestId('testid1');
+      let field = provider.firstChild;
+      expect(field).toHaveStyle({width: expected});
+    });
+
+    it('only renders once for multiple resizes in the same range', function () {
+      function Component(props) {
+        let {matchedBreakpoints} = useBreakpoint();
+        let {onRender, ...otherProps} = props;
+        onRender(matchedBreakpoints[0]);
+        return <button {...otherProps}>push me</button>;
+      }
+
+      matchMedia.useMediaQuery('(min-width: 768px)');
+
+      let onRender = jest.fn();
+      render(
+        <Provider theme={theme}>
+          <Component onRender={onRender} />
+        </Provider>
+      );
+      expect(onRender).toHaveBeenCalledTimes(1);
+      expect(onRender).toHaveBeenNthCalledWith(1, 'M');
+
+      matchMedia.useMediaQuery('(min-width: 1024px)');
+      fireEvent(window, new Event('resize'));
+
+      expect(onRender).toHaveBeenCalledTimes(2);
+      expect(onRender).toHaveBeenNthCalledWith(2, 'L');
+
+      fireEvent(window, new Event('resize'));
+
+      // shouldn't fire again for something in the same range as before
+      expect(onRender).toHaveBeenCalledTimes(2);
+    });
   });
 });

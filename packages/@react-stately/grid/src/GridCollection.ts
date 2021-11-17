@@ -43,6 +43,10 @@ export class GridCollection<T> implements IGridCollection<T> {
       let childKeys = new Set();
       let last: GridNode<T>;
       for (let child of node.childNodes) {
+        if (child.type === 'cell' && child.parentKey == null) {
+          // if child is a cell parent key isn't already established by the collection, match child node to parent row
+          child.parentKey = node.key;
+        }
         childKeys.add(child.key);
 
         if (last) {
@@ -145,5 +149,10 @@ export class GridCollection<T> implements IGridCollection<T> {
 
   getItem(key: Key) {
     return this.keyMap.get(key);
+  }
+
+  at(idx: number) {
+    const keys = [...this.getKeys()];
+    return this.getItem(keys[idx]);
   }
 }

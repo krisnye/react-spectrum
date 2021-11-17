@@ -49,6 +49,10 @@ storiesOf('NumberField', module)
     () => render({formatOptions: {style: 'percent'}, label: 'Tax'})
   )
   .add(
+    'percent, max fraction digits: 2, no min fraction digits',
+    () => render({formatOptions: {style: 'percent', maximumFractionDigits: 2}, label: 'Tax'})
+  )
+  .add(
     'percent min = 2 max = 2 fraction digits',
     () => render({formatOptions: {style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2}, label: 'Tax'})
   )
@@ -78,11 +82,11 @@ storiesOf('NumberField', module)
   )
   .add(
     'quiet disabled',
-    () => render({isQuiet: true, isDisabled: true})
+    () => render({isQuiet: true, isDisabled: true, defaultValue: 10})
   )
   .add(
     'quiet readonly',
-    () => render({isQuiet: true, isReadOnly: true})
+    () => render({isQuiet: true, isReadOnly: true, defaultValue: 10})
   )
   .add(
     'validationState: invalid',
@@ -165,6 +169,14 @@ storiesOf('NumberField', module)
     () => renderNoLabel({isRequired: true, 'aria-label': 'Width'})
   )
   .add(
+    'quiet no visible label',
+    () => renderNoLabel({isQuiet: true, isRequired: true, 'aria-label': 'Width'})
+  )
+  .add(
+    'quiet no visible label hidestepper',
+    () => renderNoLabel({hideStepper: true, isQuiet: true, isRequired: true, 'aria-label': 'Width'})
+  )
+  .add(
     'aria-labelledby',
     () => (
       <>
@@ -174,8 +186,20 @@ storiesOf('NumberField', module)
     )
   )
   .add(
+    'with description, no visible label',
+    () => renderNoLabel({'aria-label': 'Age', description: 'Please select your age.'})
+  )
+  .add(
+    'with error message, labelPosition: side',
+    () => render({labelPosition: 'side', errorMessage: 'Please enter a positive number.', validationState: 'invalid'})
+  )
+  .add(
     'custom width',
     () => render({width: 'size-3000'})
+  )
+  .add(
+    'quiet custom width',
+    () => render({isQuiet: true, width: 'size-3000'})
   )
   .add(
     'custom width no visible label',
@@ -200,6 +224,10 @@ storiesOf('NumberField', module)
   .add(
     'min width',
     () => render({width: 0})
+  )
+  .add(
+    'focus events',
+    () => render({onBlur: action('onBlur'), onFocus: action('onFocus'), onFocusChange: action('onFocusChange'), onKeyDown: action('onKeyDown'), onKeyUp: action('onKeyUp')})
   );
 
 function render(props: any = {}) {

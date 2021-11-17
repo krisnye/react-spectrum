@@ -96,7 +96,7 @@ describe('ListBox', function () {
     let i = 1;
     for (let item of items) {
       expect(item).toHaveAttribute('tabindex');
-      expect(item).toHaveAttribute('aria-selected');
+      expect(item).not.toHaveAttribute('aria-selected');
       expect(item).toHaveAttribute('aria-disabled');
       expect(item).toHaveAttribute('aria-posinset', '' + i++);
       expect(item).toHaveAttribute('aria-setsize');
@@ -246,7 +246,7 @@ describe('ListBox', function () {
     });
 
     it('supports disabled items', function () {
-      let tree = renderComponent({onSelectionChange, disabledKeys: ['Baz'], autoFocus: 'first'});
+      let tree = renderComponent({onSelectionChange, selectionMode: 'single', disabledKeys: ['Baz'], autoFocus: 'first'});
       let listbox = tree.getByRole('listbox');
       let options = within(listbox).getAllByRole('option');
 
@@ -762,6 +762,33 @@ describe('ListBox', function () {
       fireEvent.scroll(listbox);
 
       expect(onLoadMore).toHaveBeenCalledTimes(1);
+    });
+
+    it('should fire onLoadMore if there aren\'t enough items to fill the ListBox ', function () {
+      // Mock clientHeight to match maxHeight prop
+      let maxHeight = 300;
+      jest.spyOn(window.HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(() => maxHeight);
+
+      let onLoadMore = jest.fn();
+      let items = [];
+      for (let i = 1; i <= 5; i++) {
+        items.push({name: 'Test ' + i});
+      }
+
+      let {getByRole} = render(
+        <Provider theme={theme}>
+          <ListBox aria-label="listbox" items={items} maxHeight={maxHeight} onLoadMore={onLoadMore}>
+            {item => <Item key={item.name}>{item.name}</Item>}
+          </ListBox>
+        </Provider>
+      );
+
+      let listbox = getByRole('listbox');
+      let options = within(listbox).getAllByRole('option');
+      expect(options.length).toBe(5);
+      // onLoadMore called twice from onVisibleRectChange due to ListBox sizeToFit
+      // onLoadMore called three times from useLayoutEffect
+      expect(onLoadMore).toHaveBeenCalledTimes(5);
     });
   });
 });

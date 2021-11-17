@@ -16,9 +16,9 @@ import {useControlledState} from '@react-stately/utils';
 import {useRef, useState} from 'react';
 
 export interface ColorWheelState {
-  /** The current color value displayed by the color wheel. */
+  /** The current color value represented by the color wheel. */
   readonly value: Color,
-  /** Sets the color value displayed by the color wheel, and triggers `onChange`. */
+  /** Sets the color value represented by the color wheel, and triggers `onChange`. */
   setValue(value: string | Color): void,
 
   /** The current value of the hue channel displayed by the color wheel. */
@@ -36,10 +36,12 @@ export interface ColorWheelState {
   /** Decrements the hue by the given amount (defaults to 1). */
   decrement(minStepSize?: number): void,
 
-  /** Whether the cxolor wheel is currently being dragged. */
+  /** Whether the color wheel is currently being dragged. */
   readonly isDragging: boolean,
   /** Sets whether the color wheel is being dragged. */
-  setDragging(value: boolean): void
+  setDragging(value: boolean): void,
+  /** Returns the color that should be displayed in the color wheel instead of `value`. */
+  getDisplayColor(): Color
 }
 
 function normalizeColor(v: string | Color) {
@@ -106,6 +108,7 @@ export function useColorWheelState(props: ColorWheelProps): ColorWheelState {
   valueRef.current = value;
 
   let [isDragging, setDragging] = useState(false);
+  let isDraggingRef = useRef(false).current;
 
   let hue = value.getChannelValue('hue');
   function setHue(v: number) {
@@ -115,7 +118,9 @@ export function useColorWheelState(props: ColorWheelProps): ColorWheelState {
     }
     v = roundToStep(mod(v, 360), step);
     if (hue !== v) {
-      setValue(value.withChannelValue('hue', v));
+      let color = value.withChannelValue('hue', v);
+      valueRef.current = color;
+      setValue(color);
     }
   }
 
@@ -153,14 +158,18 @@ export function useColorWheelState(props: ColorWheelProps): ColorWheelState {
       }
     },
     setDragging(isDragging) {
-      setDragging(wasDragging => {
-        if (onChangeEnd && !isDragging && wasDragging) {
-          onChangeEnd(valueRef.current);
-        }
+      let wasDragging = isDraggingRef;
+      isDraggingRef = isDragging;
 
-        return isDragging;
-      });
+      if (onChangeEnd && !isDragging && wasDragging) {
+        onChangeEnd(valueRef.current);
+      }
+
+      setDragging(isDragging);
     },
-    isDragging
+    isDragging,
+    getDisplayColor() {
+      return value.withChannelValue('saturation', 100).withChannelValue('lightness', 50);
+    }
   };
 }

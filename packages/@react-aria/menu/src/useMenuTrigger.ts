@@ -18,7 +18,9 @@ import {useOverlayTrigger} from '@react-aria/overlays';
 
 interface MenuTriggerAriaProps {
   /** The type of menu that the menu trigger opens. */
-  type?: 'menu' | 'listbox'
+  type?: 'menu' | 'listbox',
+  /** Whether menu trigger is disabled. */
+  isDisabled?: boolean
 }
 
 interface MenuTriggerAria {
@@ -36,24 +38,34 @@ interface MenuTriggerAria {
  */
 export function useMenuTrigger(props: MenuTriggerAriaProps, state: MenuTriggerState, ref: RefObject<HTMLElement>): MenuTriggerAria {
   let {
-    type = 'menu' as MenuTriggerAriaProps['type']
+    type = 'menu' as MenuTriggerAriaProps['type'],
+    isDisabled
   } = props;
 
   let menuTriggerId = useId();
   let {triggerProps, overlayProps} = useOverlayTrigger({type}, state, ref);
 
   let onKeyDown = (e) => {
-    if ((typeof e.isDefaultPrevented === 'function' && e.isDefaultPrevented()) || e.defaultPrevented) {
+    if (isDisabled) {
       return;
     }
 
     if (ref && ref.current) {
       switch (e.key) {
         case 'ArrowDown':
+        case 'Enter':
+        case ' ':
+          // Stop propagation, unless it would already be handled by useKeyboard.
+          if (!('continuePropagation' in e)) {
+            e.stopPropagation();
+          }
           e.preventDefault();
           state.toggle('first');
           break;
         case 'ArrowUp':
+          if (!('continuePropagation' in e)) {
+            e.stopPropagation();
+          }
           e.preventDefault();
           state.toggle('last');
           break;
@@ -67,14 +79,14 @@ export function useMenuTrigger(props: MenuTriggerAriaProps, state: MenuTriggerSt
       id: menuTriggerId,
       onPressStart(e) {
         // For consistency with native, open the menu on mouse/key down, but touch up.
-        if (e.pointerType !== 'touch') {
-          // If opened with a keyboard or screen reader, auto focus the first item.
+        if (e.pointerType !== 'touch' && e.pointerType !== 'keyboard' && !isDisabled) {
+          // If opened with a screen reader, auto focus the first item.
           // Otherwise, the menu itself will be focused.
-          state.toggle(e.pointerType === 'keyboard' || e.pointerType === 'virtual' ? 'first' : null);
+          state.toggle(e.pointerType === 'virtual' ? 'first' : null);
         }
       },
       onPress(e) {
-        if (e.pointerType === 'touch') {
+        if (e.pointerType === 'touch' && !isDisabled) {
           state.toggle();
         }
       },

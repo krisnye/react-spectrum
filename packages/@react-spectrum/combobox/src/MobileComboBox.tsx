@@ -13,7 +13,6 @@
 import AlertMedium from '@spectrum-icons/ui/AlertMedium';
 import {AriaButtonProps} from '@react-types/button';
 import buttonStyles from '@adobe/spectrum-css-temp/components/button/vars.css';
-import {chain, mergeProps, useId} from '@react-aria/utils';
 import CheckmarkMedium from '@spectrum-icons/ui/CheckmarkMedium';
 import ChevronDownMedium from '@spectrum-icons/ui/ChevronDownMedium';
 import {classNames, unwrapDOMRef} from '@react-spectrum/utils';
@@ -29,8 +28,9 @@ import {focusSafely} from '@react-aria/focus';
 import intlMessages from '../intl/*.json';
 import labelStyles from '@adobe/spectrum-css-temp/components/fieldlabel/vars.css';
 import {ListBoxBase, useListBoxLayout} from '@react-spectrum/listbox';
+import {mergeProps, useId} from '@react-aria/utils';
 import {ProgressCircle} from '@react-spectrum/progress';
-import React, {HTMLAttributes, ReactElement, ReactNode, RefObject, useCallback, useRef} from 'react';
+import React, {HTMLAttributes, ReactElement, ReactNode, RefObject, useCallback, useEffect, useRef, useState} from 'react';
 import searchStyles from '@adobe/spectrum-css-temp/components/search/vars.css';
 import {setInteractionModality, useHover} from '@react-aria/interactions';
 import {SpectrumComboBoxProps} from '@react-types/combobox';
@@ -41,9 +41,9 @@ import {Tray} from '@react-spectrum/overlays';
 import {useButton} from '@react-aria/button';
 import {useComboBox} from '@react-aria/combobox';
 import {useDialog} from '@react-aria/dialog';
+import {useField} from '@react-aria/label';
 import {useFilter} from '@react-aria/i18n';
 import {useFocusableRef} from '@react-spectrum/utils';
-import {useLabel} from '@react-aria/label';
 import {useMessageFormatter} from '@react-aria/i18n';
 import {useOverlayTrigger} from '@react-aria/overlays';
 import {useProviderProps} from '@react-spectrum/provider';
@@ -55,16 +55,17 @@ export const MobileComboBox = React.forwardRef(function MobileComboBox<T extends
     isQuiet,
     isDisabled,
     validationState,
-    isReadOnly,
-    loadingState
+    isReadOnly
   } = props;
 
-  let formatMessage = useMessageFormatter(intlMessages);
   let {contains} = useFilter({sensitivity: 'base'});
   let state = useComboBoxState({
     ...props,
     defaultFilter: contains,
     allowsEmptyCollection: true,
+    // Needs to be false here otherwise we double up on commitSelection/commitCustomValue calls when
+    // user taps on underlay (i.e. initial tap will call setFocused(false) -> commitSelection/commitCustomValue via onBlur,
+    // then the closing of the tray will call setFocused(false) again due to cleanup effect)
     shouldCloseOnBlur: false
   });
 
@@ -72,7 +73,7 @@ export const MobileComboBox = React.forwardRef(function MobileComboBox<T extends
   let domRef = useFocusableRef(ref, buttonRef);
   let {triggerProps, overlayProps} = useOverlayTrigger({type: 'listbox'}, state, buttonRef);
 
-  let {labelProps, fieldProps} = useLabel({
+  let {labelProps, fieldProps} = useField({
     ...props,
     labelElementType: 'span'
   });
@@ -85,20 +86,7 @@ export const MobileComboBox = React.forwardRef(function MobileComboBox<T extends
     }
   };
 
-  let loadingCircle = (
-    <ProgressCircle
-      aria-label={formatMessage('loading')}
-      size="S"
-      isIndeterminate
-      UNSAFE_className={classNames(
-        textfieldStyles,
-        'spectrum-Textfield-circleLoader',
-        classNames(
-          styles,
-          'spectrum-InputGroup-input-circleLoader'
-        )
-      )} />
-  );
+  let onClose = () => state.commit();
 
   return (
     <>
@@ -109,21 +97,20 @@ export const MobileComboBox = React.forwardRef(function MobileComboBox<T extends
         ref={domRef}
         includeNecessityIndicatorInAccessibilityName>
         <ComboBoxButton
-          {...mergeProps(triggerProps, fieldProps)}
+          {...mergeProps(triggerProps, fieldProps, {autoFocus: props.autoFocus})}
           ref={buttonRef}
           isQuiet={isQuiet}
           isDisabled={isDisabled}
           isPlaceholder={!state.inputValue}
           validationState={validationState}
-          onPress={() => !isReadOnly && state.open()}
-          isLoading={loadingState === 'loading' || loadingState === 'filtering'}
-          loadingIndicator={loadingState != null && loadingCircle}>
+          onPress={() => !isReadOnly && state.open(null, 'manual')}>
           {state.inputValue || props.placeholder || ''}
         </ComboBoxButton>
       </Field>
-      <Tray isOpen={state.isOpen} onClose={chain(state.commit, state.close)} isFixedHeight isNonModal {...overlayProps}>
+      <Tray isOpen={state.isOpen} onClose={onClose} isFixedHeight isNonModal {...overlayProps}>
         <ComboBoxTray
           {...props}
+          onClose={onClose}
           overlayProps={overlayProps}
           state={state} />
       </Tray>
@@ -138,9 +125,7 @@ interface ComboBoxButtonProps extends AriaButtonProps {
   validationState?: ValidationState,
   children?: ReactNode,
   style?: React.CSSProperties,
-  className?: string,
-  isLoading?: boolean,
-  loadingIndicator?: ReactElement
+  className?: string
 }
 
 const ComboBoxButton = React.forwardRef(function ComboBoxButton(props: ComboBoxButtonProps, ref: RefObject<HTMLElement>) {
@@ -151,9 +136,7 @@ const ComboBoxButton = React.forwardRef(function ComboBoxButton(props: ComboBoxB
     validationState,
     children,
     style,
-    className,
-    isLoading,
-    loadingIndicator
+    className
   } = props;
   let formatMessage = useMessageFormatter(intlMessages);
   let valueId = useId();
@@ -219,7 +202,6 @@ const ComboBoxButton = React.forwardRef(function ComboBoxButton(props: ComboBoxB
               {
                 'spectrum-Textfield--invalid': validationState === 'invalid',
                 'spectrum-Textfield--valid': validationState === 'valid',
-                'spectrum-Textfield--loadable': loadingIndicator,
                 'spectrum-Textfield--quiet': isQuiet
               },
               classNames(
@@ -260,8 +242,7 @@ const ComboBoxButton = React.forwardRef(function ComboBoxButton(props: ComboBoxB
               {children}
             </span>
           </div>
-          {validationState && !isLoading ? validation : null}
-          {isLoading && loadingIndicator}
+          {validationState ? validation : null}
         </div>
         <div
           className={
@@ -291,22 +272,25 @@ const ComboBoxButton = React.forwardRef(function ComboBoxButton(props: ComboBoxB
 interface ComboBoxTrayProps extends SpectrumComboBoxProps<unknown> {
   state: ComboBoxState<unknown>,
   overlayProps: HTMLAttributes<HTMLElement>,
-  loadingIndicator?: ReactElement
+  loadingIndicator?: ReactElement,
+  onClose: () => void
 }
 
 function ComboBoxTray(props: ComboBoxTrayProps) {
   let {
     // completionMode = 'suggest',
-    menuTrigger = 'input',
     state,
     isDisabled,
     validationState,
     label,
     overlayProps,
     loadingState,
-    onLoadMore
+    onLoadMore,
+    onClose
   } = props;
 
+  let timeout = useRef(null);
+  let [showLoading, setShowLoading] = useState(false);
   let inputRef = useRef<HTMLInputElement>();
   let buttonRef = useRef<FocusableRefValue<HTMLElement>>();
   let popoverRef = useRef<HTMLDivElement>();
@@ -322,14 +306,22 @@ function ComboBoxTray(props: ComboBoxTrayProps) {
       buttonRef: unwrapDOMRef(buttonRef),
       popoverRef: popoverRef,
       listBoxRef,
-      inputRef,
-      menuTrigger
+      inputRef
     },
     state
   );
 
   React.useEffect(() => {
     focusSafely(inputRef.current);
+
+    // When the tray unmounts, set state.isFocused (i.e. the tray input's focus tracker) to false.
+    // This is to prevent state.isFocused from being set to true when the tray closes via tapping on the underlay
+    // (FocusScope attempts to restore focus to the tray input when tapping outside the tray due to "contain")
+    // Have to do this manually since React doesn't call onBlur when a component is unmounted: https://github.com/facebook/react/issues/12363
+    return () => {
+      state.setFocused(false);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   let {dialogProps} = useDialog({
@@ -398,6 +390,42 @@ function ComboBoxTray(props: ComboBoxTrayProps) {
     popoverRef.current.focus();
   }, [inputRef, popoverRef, isTouchDown]);
 
+  let inputValue = inputProps.value;
+  let lastInputValue = useRef(inputValue);
+  useEffect(() => {
+    if (loadingState === 'filtering' && !showLoading) {
+      if (timeout.current === null) {
+        timeout.current = setTimeout(() => {
+          setShowLoading(true);
+        }, 500);
+      }
+
+      // If user is typing, clear the timer and restart since it is a new request
+      if (inputValue !== lastInputValue.current) {
+        clearTimeout(timeout.current);
+        timeout.current = setTimeout(() => {
+          setShowLoading(true);
+        }, 500);
+      }
+    } else if (loadingState !== 'filtering') {
+      // If loading is no longer happening, clear any timers and hide the loading circle
+      setShowLoading(false);
+      clearTimeout(timeout.current);
+      timeout.current = null;
+    }
+
+    lastInputValue.current = inputValue;
+  }, [loadingState, inputValue, showLoading]);
+
+  let onKeyDown = (e) => {
+    // Close virtual keyboard if user hits Enter w/o any focused options
+    if (e.key === 'Enter' && state.selectionManager.focusedKey == null) {
+      popoverRef.current.focus();
+    } else {
+      inputProps.onKeyDown(e);
+    }
+  };
+
   return (
     <FocusScope restoreFocus contain>
       <div
@@ -409,17 +437,19 @@ function ComboBoxTray(props: ComboBoxTrayProps) {
             'tray-dialog'
           )
         }>
-        <DismissButton onDismiss={chain(state.commit, state.close)} />
+        <DismissButton onDismiss={onClose} />
         <TextFieldBase
           label={label}
           labelProps={labelProps}
-          inputProps={inputProps}
+          inputProps={{...inputProps, onKeyDown}}
           inputRef={inputRef}
           isDisabled={isDisabled}
-          isLoading={loadingState === 'filtering'}
+          isLoading={showLoading && loadingState === 'filtering'}
           loadingIndicator={loadingState != null && loadingCircle}
           validationState={validationState}
-          wrapperChildren={(state.inputValue !== '' || loadingState === 'filtering') && !props.isReadOnly && clearButton}
+          labelAlign="start"
+          labelPosition="top"
+          wrapperChildren={(state.inputValue !== '' || loadingState === 'filtering' || validationState != null) && !props.isReadOnly && clearButton}
           UNSAFE_className={
             classNames(
               searchStyles,
@@ -456,7 +486,8 @@ function ComboBoxTray(props: ComboBoxTrayProps) {
             )
           } />
         <ListBoxBase
-          domProps={mergeProps(listBoxProps, {onTouchStart, onTouchEnd})}
+          {...listBoxProps}
+          domProps={{onTouchStart, onTouchEnd}}
           disallowEmptySelection
           shouldSelectOnPressUp
           focusOnPointerEnter
@@ -478,7 +509,7 @@ function ComboBoxTray(props: ComboBoxTrayProps) {
           onScroll={onScroll}
           onLoadMore={onLoadMore}
           isLoading={loadingState === 'loading' || loadingState === 'loadingMore'} />
-        <DismissButton onDismiss={chain(state.commit, state.close)} />
+        <DismissButton onDismiss={onClose} />
       </div>
     </FocusScope>
   );

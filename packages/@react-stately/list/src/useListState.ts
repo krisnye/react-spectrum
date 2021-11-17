@@ -10,16 +10,19 @@
  * governing permissions and limitations under the License.
  */
 
-import {Collection, CollectionBase, MultipleSelection, Node} from '@react-types/shared';
+import {Collection, CollectionBase, Node} from '@react-types/shared';
 import {Key, useEffect, useMemo} from 'react';
 import {ListCollection} from './ListCollection';
-import {SelectionManager, useMultipleSelectionState} from '@react-stately/selection';
+import {MultipleSelectionStateProps, SelectionManager, useMultipleSelectionState} from '@react-stately/selection';
 import {useCollection} from '@react-stately/collections';
 
-export interface ListProps<T> extends CollectionBase<T>, MultipleSelection {
+export interface ListProps<T> extends CollectionBase<T>, MultipleSelectionStateProps {
   /** Filter function to generate a filtered list of nodes. */
-  filter?: (nodes: Iterable<Node<T>>) => Iterable<Node<T>>
+  filter?: (nodes: Iterable<Node<T>>) => Iterable<Node<T>>,
+  /** @private */
+  suppressTextValueWarning?: boolean
 }
+
 export interface ListState<T> {
   /** A collection of items in the list. */
   collection: Collection<Node<T>>,
@@ -36,9 +39,7 @@ export interface ListState<T> {
  * of items from props, and manages multiple selection state.
  */
 export function useListState<T extends object>(props: ListProps<T>): ListState<T>  {
-  let {
-    filter
-  } = props;
+  let {filter} = props;
 
   let selectionState = useMultipleSelectionState(props);
   let disabledKeys = useMemo(() =>
@@ -46,8 +47,9 @@ export function useListState<T extends object>(props: ListProps<T>): ListState<T
   , [props.disabledKeys]);
 
   let factory = nodes => filter ? new ListCollection(filter(nodes)) : new ListCollection(nodes as Iterable<Node<T>>);
+  let context = useMemo(() => ({suppressTextValueWarning: props.suppressTextValueWarning}), [props.suppressTextValueWarning]);
 
-  let collection = useCollection(props, factory, null, [filter]);
+  let collection = useCollection(props, factory, context, [filter]);
 
   // Reset focused key if that item is deleted from the collection.
   useEffect(() => {
